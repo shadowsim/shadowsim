@@ -1,12 +1,14 @@
 shadowsim
 =========
 
-SIM Card tunnel for Alcatel OT-918D
+SIM Card tunnel for Alcatel OT-918D with Baseband 6573 (MTK).
 
-You need BB-Firmware and mdlogger:
+You need BB 6573 with kernel version 2.6.35.7 android-bld1@aclgcl-ubnt122#1.
 
-091c4a808bbe8c5eeb8e99df63685d44  modem.img.orig
-ca597d1c2a0047ae076d7d61ed8f6168  mdlogger.bak
+SHA256 of unmodified files:
+
+ - 091c4a808bbe8c5eeb8e99df63685d44  modem.img.orig
+ - ca597d1c2a0047ae076d7d61ed8f6168  mdlogger.bak
 
 Usage
 =====
