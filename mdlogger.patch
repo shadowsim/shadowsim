@@ -1,0 +1,759 @@
+diff --git a/SimProxy.udb b/SimProxy.udb
+index 0177b89..f523353 100644
+diff --git a/jni/Android.mk b/jni/Android.mk
+index f0883fe..eab19a5 100755
+--- a/jni/Android.mk
++++ b/jni/Android.mk
+@@ -5,14 +5,13 @@ include $(CLEAR_VARS)
+ 
+ LOCAL_CFLAGS += -DHAVE_SYS_UIO_H
+ LOCAL_ARM_MODE := arm
+-LOCAL_MODULE := mdlogger
++LOCAL_MODULE := softsim
+ LOCAL_MODULE_TAGS := user
+ #LOCAL_C_INCLUDES += $(MTK_PATH_SOURCE)external/mdlogger_ctrl
+ LOCAL_C_INCLUDES += ../mdlogger_ctrl
+ LOCAL_C_INCLUDES += ../../../../frameworks/base/include
+ LOCAL_C_INCLUDES += ../../../../system/core/include
+-LOCAL_SRC_FILES := mdlogger.cpp \
+-			logwriter.cpp \
++LOCAL_SRC_FILES := logwriter.cpp \
+ 			logrelayer.cpp \
+ 			cmdreader.cpp \
+ 			pcengine.cpp \
+@@ -20,6 +19,7 @@ LOCAL_SRC_FILES := mdlogger.cpp \
+             mdlutil.cpp \
+             mdllog.cpp \
+ 	simproxy.cpp \
++	softsim.cpp \
+ 
+ LOCAL_SHARED_LIBRARIES := libutils libcutils
+ include $(BUILD_EXECUTABLE)
+diff --git a/jni/cmdreader.h b/jni/cmdreader.h
+index 62e5947..ab95dc9 100755
+--- a/jni/cmdreader.h
++++ b/jni/cmdreader.h
+@@ -44,7 +44,7 @@ namespace mdlogger
+ 		MDL_BOOL cmdStartLogBuf(const void *data, unsigned int len);
+ 		MDL_BOOL cmdStopLogBuf(const void *data, unsigned int len);
+ 	public:
+-		CmdReader(PCCommEngine *pPCEngine = NULL, MDCommEngine *pMDEngine = NULL);
++		CmdReader(PCCommEngine *pPCEngine = NULL, SimProxy *pMDEngine = NULL);
+ 		~CmdReader(){};
+ 		MDL_BOOL onReceiveAPPacket(const void *data, unsigned int len, unsigned char cmdId);
+ 		MDL_BOOL onReceiveMDPacket(const void *data, unsigned int len, unsigned char bufId);
+diff --git a/jni/logrelayer.cpp b/jni/logrelayer.cpp
+index e0af66c..c0c8bf7 100755
+--- a/jni/logrelayer.cpp
++++ b/jni/logrelayer.cpp
+@@ -22,13 +22,13 @@
+  * $Log:$
+  *******************************************************************************/
+ #include "logrelayer.h"
+-#include "mdlogger.h"
++#include "softsim.h"
+ #include "mdlutil.h"
+ #include "mdllog.h"
+ 
+ namespace mdlogger
+ {
+-	LogRelayer::LogRelayer(PCCommEngine *pPCEngine, MDCommEngine *pMDEngine)
++	LogRelayer::LogRelayer(PCCommEngine *pPCEngine, SimProxy *pMDEngine)
+ 	{
+ 		m_pPCEngine = pPCEngine;
+ 		m_pMDEngine = pMDEngine;
+diff --git a/jni/logrelayer.h b/jni/logrelayer.h
+index 2bcaad0..56cf4b0 100755
+--- a/jni/logrelayer.h
++++ b/jni/logrelayer.h
+@@ -29,17 +29,17 @@
+ #include <stdio.h>
+ #include "mdltypes.h"
+ #include "pcengine.h"
+-#include "mdengine.h"
++#include "simproxy.h"
+ 
+ namespace mdlogger
+ {
+ 	class LogRelayer : public MDCommHandler
+ 	{
+ 	private:
+-		MDCommEngine* m_pMDEngine;
++		SimProxy* m_pMDEngine;
+ 		PCCommEngine* m_pPCEngine;
+ 	public:
+-		LogRelayer(PCCommEngine *pPCEngine = NULL, MDCommEngine *pMDEngine = NULL);
++		LogRelayer(PCCommEngine *pPCEngine = NULL, SimProxy *pMDEngine = NULL);
+ 		~LogRelayer();
+ 		MDL_BOOL init();
+ 		MDL_BOOL deinit();
+diff --git a/jni/logwriter.cpp b/jni/logwriter.cpp
+index 63055fd..cc7c02a 100755
+--- a/jni/logwriter.cpp
++++ b/jni/logwriter.cpp
+@@ -31,7 +31,7 @@
+ #include <unistd.h>
+ 
+ #include "logwriter.h"
+-#include "mdlogger.h"
++#include "softsim.h"
+ #include "mdlutil.h"
+ #include "mdllog.h"
+ 
+@@ -365,7 +365,7 @@ namespace mdlogger
+ 	const char *LogWriter::MEMDUMP_FILE_NAME = "%s/Memory_%s_%s.bin";
+ 	const char *LogWriter::bufNameArray[6] = {"PS","L1", "DAK", "DMDSPMLT", "MD2GMLT", "ASTL1"};
+ 
+-	LogWriter::LogWriter(MDCommEngine *pMDEngine)
++	LogWriter::LogWriter(SimProxy *pMDEngine)
+ 	{
+ 		m_pMDEngine = pMDEngine;
+ 		m_nBufCnt = 0;
+diff --git a/jni/logwriter.h b/jni/logwriter.h
+index d1e4278..8d0ac02 100755
+--- a/jni/logwriter.h
++++ b/jni/logwriter.h
+@@ -29,7 +29,7 @@
+ #include <stdio.h>
+ #include "mdltypes.h"
+ #include "pcengine.h"
+-#include "mdengine.h"
++#include "simproxy.h"
+ 
+ namespace mdlogger
+ {
+@@ -103,7 +103,7 @@ namespace mdlogger
+ 		char m_szFolderPath[BaseFile::PATH_LEN];
+ 		BaseFile **m_ppFiles;
+ 		MDL_BOOL *m_pbMemDump;
+-		MDCommEngine* m_pMDEngine;
++		SimProxy* m_pMDEngine;
+ 		MDL_BOOL m_bDiskAvailable;
+ 		MDL_BOOL m_bInformNoLogFile;
+ 
+@@ -118,7 +118,7 @@ namespace mdlogger
+ 		MDL_BOOL closeAllFiles(void);
+ 		MDL_BOOL writeFile(int nBufId, const char *ptr, unsigned int len);
+ 	public:
+-		LogWriter(MDCommEngine *pMDEngine = NULL);
++		LogWriter(SimProxy *pMDEngine = NULL);
+ 		~LogWriter();
+ 		static unsigned long getDiskLeftSpace();
+ 		static MDL_BOOL isDiskAvailable();
+diff --git a/jni/mdllog.cpp b/jni/mdllog.cpp
+index 3755b05..fac32f0 100755
+--- a/jni/mdllog.cpp
++++ b/jni/mdllog.cpp
+@@ -25,17 +25,18 @@
+ 
+ void dumpHex(const char* con, unsigned int length, unsigned int bytesPerRow)
+ {
+-	if (!g_bDumpEnabled)
++/*	if (!g_bDumpEnabled)
+ 	{
++		MDL_LOGD("g_bDumpEnabled is false\n");
+ 		return;
+-	}
++	}*/
+ 	unsigned int i = 0;
+ 	unsigned int j = 0;
+ 	unsigned int rowLength = 3 * bytesPerRow + 1;
+ 	char hex[rowLength];
+ 	char high;
+ 	char low;
+-	MDL_LOGD("--- Dump begin ---------------------------------");
++	MDL_LOGD("--- Dump begin ---------------------------------\n");
+ 	for(i = 0; i < length; i++)
+ 	{
+ 		high = (con[i] >> 4);
+@@ -59,10 +60,10 @@ void dumpHex(const char* con, unsigned int length, unsigned int bytesPerRow)
+ 		{
+ 			hex[j] = '\0';
+ 			j = 0;
+-			MDL_LOGD("%s", hex);
++			MDL_LOGD("%s\n", hex);
+ 		}
+ 	}
+-	MDL_LOGD("--- Dump end -----------------------------------");
++	MDL_LOGD("--- Dump end -----------------------------------\n");
+ }
+ 
+ void dumpHex(const char* con, unsigned int length)
+diff --git a/jni/simproxy.cpp b/jni/simproxy.cpp
+index 47420b6..b1699e1 100644
+--- a/jni/simproxy.cpp
++++ b/jni/simproxy.cpp
+@@ -306,34 +306,39 @@ out:
+ 		unsigned int shmVirAddr;
+ 
+ 		// Open CCCI channel
++		MDL_LOGD("Opening CCI_MD_LOG_RX.\n");
+ 		m_nRxFd = open(CCCI_MD_LOG_RX, O_RDWR);
+ 		if (m_nRxFd < 0)
+ 		{
+-			MDL_LOGE("Failed to open %s, errno=%d", CCCI_MD_LOG_RX, errno);
++			MDL_LOGE("Failed to open %s, errno=%d\n", CCCI_MD_LOG_RX, errno);
+ 			return MDL_FALSE;
+ 		}
++		MDL_LOGD("Opening CCI_MD_LOG_TX.\n");
+ 		m_nTxFd = open(CCCI_MD_LOG_TX, O_RDWR);
+ 		if (m_nTxFd < 0)
+ 		{
+-			MDL_LOGE("Failed to open %s, errno=%d", CCCI_MD_LOG_TX, errno);
++			MDL_LOGE("Failed to open %s, errno=%d\n", CCCI_MD_LOG_TX, errno);
+ 			return MDL_FALSE;
+ 		}
+ 
+ 		// Notify modem to switch to AP logging mode
++		MDL_LOGD("Writing to modem.\n");
+ 		m_ccciBuf.cmdId = CCCI_A2M_SWITCH_MD_LOGGING_MODE;
+ 		while (!writeCCCI(m_ccciBuf))
+ 		{
+ 			sleep(2);
+ 			//return MDL_FALSE;
+ 		}
++		MDL_LOGD("Wait for modem allocation.\n");
+ 		// Wait until read modem shared memory allocation request
+ 		if (!readCCCI(m_ccciBuf))
+ 		{
+ 			return MDL_FALSE;
+ 		}
++		MDL_LOGD("Got modem allocation request.\n");
+ 		if (m_ccciBuf.cmdId != CCCI_M2A_SHARED_MEM_CREATE_REQ)
+ 		{
+-			MDL_LOGE("Unexpected CCCI message: <%08x>, <%08x>, <%08x>, <%08x>",
++			MDL_LOGE("Unexpected CCCI message: <%08x>, <%08x>, <%08x>, <%08x>\n",
+ 					m_ccciBuf.header, m_ccciBuf.cmdId, m_ccciBuf.channel, m_ccciBuf.para);
+ 			return MDL_FALSE;
+ 		}
+@@ -341,22 +346,22 @@ out:
+ 		{
+ 			shmLen = m_ccciBuf.para;
+ 		}
+-		MDL_LOGI("MD request %uB shm...", shmLen);
++		MDL_LOGI("MD request %uB shm...\n", shmLen);
+ 		// Allocate shared memory and return physical memory address
+ 		shmPhyAddr = ioctl(m_nRxFd, CCCI_IOC_ALLOC_MD_LOG_MEM, &shmLen);
+ 		if (shmPhyAddr == 0)
+ 		{
+-			MDL_LOGE("Failed to allocate shm.");
++			MDL_LOGE("Failed to allocate shm.\n");
+ 			return MDL_FALSE;
+ 		}
+ 		// mapping phy log memory to user space
+ 		shmVirAddr = (unsigned int)mmap(NULL, shmLen, PROT_READ | PROT_WRITE, MAP_SHARED, m_nRxFd, 0);
+ 		if (shmVirAddr == 0)
+ 		{
+-			MDL_LOGE("Failed to mmap shm.");
++			MDL_LOGE("Failed to mmap shm.\n");
+ 			return MDL_FALSE;
+ 		}
+-		MDL_LOGI("Shm allocated, phy=%08x, vir=%08x, len=%d", shmPhyAddr, shmVirAddr, shmLen);
++		MDL_LOGI("Shm allocated, phy=%08x, vir=%08x, len=%d\n", shmPhyAddr, shmVirAddr, shmLen);
+ 		// Notify modem the allocated shm for logging
+ 		m_ccciBuf.cmdId = CCCI_A2M_SHARED_MEM_ADDR_REPORT;
+ 		m_ccciBuf.para = shmPhyAddr;
+@@ -371,7 +376,7 @@ out:
+ 		}
+ 		if (m_ccciBuf.cmdId != CCCI_M2A_READY_FOR_LOGGING)
+ 		{
+-			MDL_LOGE("Unexpected CCCI message: <%08x>, <%08x>, <%08x>, <%08x>",
++			MDL_LOGE("Unexpected CCCI message: <%08x>, <%08x>, <%08x>, <%08x>\n",
+ 					m_ccciBuf.header, m_ccciBuf.cmdId, m_ccciBuf.channel, m_ccciBuf.para);
+ 			return MDL_FALSE;
+ 		}
+@@ -379,8 +384,8 @@ out:
+ 		// Get log buffer count;
+ 		m_pShm = new SharedMem();
+ 		m_pShm->init(shmLen, shmPhyAddr, shmVirAddr);
+-		MDL_LOGI("M2A_BUF_COUNT=%u", m_pShm->header()->m2aBufCnt);
+-		MDL_LOGI("A2M_BUF_COUNT=%u", m_pShm->header()->a2mBufCnt);
++		MDL_LOGI("M2A_BUF_COUNT=%u\n", m_pShm->header()->m2aBufCnt);
++		MDL_LOGI("A2M_BUF_COUNT=%u\n", m_pShm->header()->a2mBufCnt);
+ 		m_nM2ABufCnt = m_pShm->header()->m2aBufCnt;
+ 		m_pbLogBufOnOff = new MDL_BOOL[m_nM2ABufCnt];
+ 		for (int i = 0; i < m_nM2ABufCnt; i++)
+@@ -395,7 +400,7 @@ out:
+ 
+ 		if (sem_init(&m_semA2M, 0, 1) != 0)
+ 		{
+-			MDL_LOGE("Semaphore initialization failed for MDEngine.");
++			MDL_LOGE("Semaphore initialization failed for MDEngine.\n");
+ 			return MDL_FALSE;
+ 		}
+ 		return MDL_TRUE;
+@@ -649,6 +654,257 @@ out:
+ 		return MDL_TRUE;
+ 	}
+ 
++	MDL_BOOL SimProxy::dumpBuf(unsigned char bufId)
++	{
++		MDL_LOGD("Dumping buffer %u\n", bufId);
++		//assert(bufId < m_nM2ABufCnt);
++		BUF_CTRL_BLOCK *pBufCtrl = m_pShm->m2aBufCtrl(bufId);
++		//		bufId, pBufCtrl->ptr, pBufCtrl->len, start, end);
++		/*
++		if (!m_pbLogBufOnOff[bufId])
++		{
++		 MDL_LOGW("Cannot move log from log buffer %u for it's stopped...\n", bufId);
++		 return MDL_FALSE;
++		}*/
++		MDL_LOGD ("m_pShm->offset(): %x, pBufCtrl->ptr: %x, pBufCtrl->end: %x\n", m_pShm->offset(), pBufCtrl->ptr, pBufCtrl->end);
++		dumpHex((const char *)(m_pShm->offset() + pBufCtrl->ptr), 2000);
++		
++		return MDL_TRUE;
++	}
++	
++	MDL_BOOL SimProxy::dumpMem()
++	{
++		MDL_LOGD("Dumping memory header\n");
++
++		MDL_LOGD ("m_pShm->header(): %p\n", (unsigned char *) m_pShm->header());
++		uint32_t *ptr = (uint32_t *) m_pShm->header();
++		uint32_t size = (uint32_t) *(ptr+0x01);
++
++		if (*ptr == 0x1) {
++			if (size > 0xFF) {
++				size = 0xFF;
++			}
++			MDL_LOGD ("Message size is %u\n", size);
++			dumpHex((const char *)(ptr+2), size);
++			*ptr = 0;
++		}
++		
++		*ptr = 2;
++		
++		
++		return MDL_TRUE;
++	}
++	
++	// shm simple format: (int indicator | int size | char buffer[size])
++	 
++	MDL_BOOL SimProxy::checkAPDU(char *buf, uint32_t *size)
++	{
++		//MDL_LOGD("-> Checking for APDU-Req header\n");
++		//MDL_LOGD ("-> m_pShm->header(): %p\n", (unsigned char *) m_pShm->header());
++	
++		uint32_t *ptr = (uint32_t *) m_pShm->header();
++		uint32_t *bufSize = (uint32_t *) (ptr+0x01);
++
++		if (*ptr == 0x1) {
++			MDL_LOGD ("Message size is %u\n", *bufSize);
++			
++			*size = *bufSize;
++			if (*size > 0xFF) {
++				*size = 0xFF;
++			}
++			memcpy(buf, ptr+2, *size);
++			*ptr = 0; // clear indicator
++			MDL_LOGD("returning full apdu\n");
++			return MDL_TRUE;
++		}		
++		
++		return MDL_FALSE;
++	}
++	
++	MDL_BOOL SimProxy::processAPDU(char *buf, uint32_t *size, char *resp, uint32_t *respsize)
++	{
++		// do something
++		return MDL_TRUE;
++	}
++
++	// write back apdu
++	MDL_BOOL SimProxy::indicateAPDUResponse()
++	{
++		MDL_LOGD("Indicating response\n");
++		uint32_t *ptr = (uint32_t *) m_pShm->header();
++		
++		*ptr = 2;	
++		
++		return MDL_TRUE;
++	}
++	
++	MDL_BOOL SimProxy::sendHexLineTCP(int sockfd, char *buf, uint32_t size)
++	{
++		MDL_LOGD("-> Sending APDU over TCP\n");
++		int i = 0;
++		uint32_t outsize = size*3+1;
++		char *bufptr;
++		char *outbuf = (char *) malloc(outsize);
++		if (outbuf == NULL) {
++			MDL_LOGD("could not allocate outBuf\n");
++		}
++		memset(outbuf, 0, outsize);
++		bufptr = outbuf;
++				
++		for (i=0; i < size; i++) {
++			printf("%02X \n", buf[i]);
++
++			sprintf(bufptr, "%02X ", buf[i]);
++			bufptr += 3;
++		}
++		
++		*bufptr = '\n';
++		
++		// ok we got our output buffer ready, send it
++		
++		int n = write(sockfd,outbuf,outsize);
++		if (n < 0) 
++		{
++			MDL_LOGD("ERROR writing to socket\n");
++			return MDL_FALSE;
++		}
++		
++		return MDL_TRUE;
++		
++	}
++	
++	// code parts from http://man7.org/tlpi/code/online/dist/sockets/read_line.c.html
++	MDL_BOOL SimProxy::recvLineTCP(int sockfd, char *buffer, uint32_t maxsize, uint32_t *readSize) {
++			
++		MDL_LOGD("-> Recv line over TCP\n");
++		uint32_t numRead;                    /* # of bytes fetched by last read() */
++		uint32_t totRead;                     /* Total bytes read so far */
++		char *buf;
++		char ch;
++
++		if (maxsize <= 0 || buffer == NULL) {
++			errno = EINVAL;
++			return -1;
++		}
++
++		buf = buffer;                       /* No pointer arithmetic on "void *" */
++
++		totRead = 0;
++		for (;;) {
++			numRead = read(sockfd, &ch, 1);
++
++			if (numRead == -1) {
++				if (errno == EINTR)         /* Interrupted --> restart read() */
++					continue;
++				else
++					return MDL_FALSE;              /* Some other error */
++
++			} else if (numRead == 0) {      /* EOF */
++				if (totRead == 0)           /* No bytes read; return 0 */
++					return MDL_TRUE;
++				else                        /* Some bytes read; add '\0' */
++					break;
++
++			} else {                        /* 'numRead' must be 1 if we get here */
++				if (totRead < maxsize - 1) {      /* Discard > (n - 1) bytes */
++					totRead++;
++					*buf++ = ch;
++				} else {
++					MDL_LOGD("buffer maxsize reached\n");
++					return MDL_FALSE;
++				}
++
++				if (ch == '\n')
++					break;
++			}
++		}
++
++		*buf = '\0';
++		MDL_LOGD("-> Read from TCP: %s\n", buf);
++		*readSize = totRead;
++		return MDL_TRUE;
++	}
++	
++	MDL_BOOL SimProxy::writeAPDU(char *src, uint32_t src_size)
++	{
++		
++		MDL_LOGD("-> Writing APDU\n");
++        static char delim[] = " ";
++        char *curtok;
++        uint32_t i = 0;
++		
++		// last hex coded bytesare apdu resp code
++		if (src_size < 5 /* 2 hex encodec bytes "XX XX" */) {
++			return MDL_FALSE;
++		}
++		
++
++		uint32_t *ptr = (uint32_t *) m_pShm->header();
++		uint32_t *dst_size = (uint32_t *) (ptr+0x01);
++
++		uint32_t *dst = (ptr+3);		
++		char *dst_ptr = (char *) dst;
++		
++		uint8_t *result_code_ptr = (uint8_t *) (ptr+2);
++
++		MDL_LOGD("-> Shared buffer is %p\n",dst);
++		for (i = 0; i < src_size;i++) {
++			
++			curtok = strtok(src, delim);
++			src = NULL;
++			
++			if (curtok == NULL) {
++				break;
++			}
++			
++			if (sscanf(curtok, "%2hhX", (char *) &dst_ptr[i]) != 1) {
++				MDL_LOGD("-> error during sscanf, invalid hex char: %s", curtok);
++				break;
++			} else {
++				MDL_LOGD("-> got hex %2hhX\n", dst_ptr[i]);
++			}						
++        }
++		
++		MDL_LOGD ("Decoded %d bytes\n", i);
++		
++		/*if ( (uint8_t) dst_ptr[i-2] == 0x9F) {
++			uint8_t *byte = (uint8_t *) &dst_ptr[i-2];
++			byte = byte + 1;
++			byte = 00;
++			MDL_LOGD("Fixing result code\n");
++		}*/
++			
++		// byte swap for endianess
++		char sw1 = dst_ptr[i-1];
++		char sw0 = dst_ptr[i-2];
++		*result_code_ptr++ = sw1;
++		*result_code_ptr-- = sw0;
++		uint8_t *bytes = (uint8_t *) result_code_ptr;
++		for (int j = 0; j < i+2;j++) {
++			MDL_LOGD ("DBG: %2hhX\n", bytes[j]);
++		}
++		
++		*dst_size = i - 2; // we don´ t count statuscode in
++		MDL_LOGD("dst_size = %u\n", *dst_size);
++	}
++
++	
++	MDL_BOOL SimProxy::dumpAllBufs()
++	{
++		MDL_BOOL ret = MDL_TRUE;
++		
++		// Notify modem that AP is busy and do not send more move log trigger
++		m_pShm->header()->apStatus = SharedMem::AP_STATUS_BUSY;
++		
++		for (unsigned char i = 0; i < m_nM2ABufCnt; i++)
++		{
++			ret &= dumpBuf(i);
++		}
++		
++		m_pShm->header()->apStatus = SharedMem::AP_STATUS_IDLE;
++		return ret;
++	}
++	
+ 	MDL_BOOL SimProxy::moveLog()
+ 	{
+ 		MDL_BOOL ret = MDL_TRUE;
+diff --git a/jni/simproxy.h b/jni/simproxy.h
+index df3aba7..9180c6b 100644
+--- a/jni/simproxy.h
++++ b/jni/simproxy.h
+@@ -137,6 +137,7 @@ namespace mdlogger
+ 		MDL_BOOL readCCCI(CCCI_BUFF_T &buf);
+ 		MDL_BOOL writeCCCI(CCCI_BUFF_T &buf);
+ 		MDL_BOOL startPolling();
++
+ 		MDL_BOOL moveLog(unsigned char bufId);
+ 		MDL_BOOL moveLog();
+ 		unsigned int encodeCatcherCmdPacket(unsigned int type, unsigned char* dst_buf, unsigned int len, unsigned char* src_buf);
+@@ -153,6 +154,20 @@ namespace mdlogger
+ 		MDL_BOOL stop();
+ 		MDL_BOOL pause();
+ 		MDL_BOOL resume();
++		
++		MDL_BOOL dumpBuf(unsigned char bufId);
++		MDL_BOOL dumpAllBufs();
++		MDL_BOOL dumpMem();
++		
++		
++		MDL_BOOL checkAPDU(char *buf, uint32_t *size);		
++		MDL_BOOL processAPDU(char *buf, uint32_t *size, char *resp, uint32_t *respsize);
++		MDL_BOOL indicateAPDUResponse();
++		MDL_BOOL sendHexLineTCP(int sockfd, char *buf, uint32_t size);
++		MDL_BOOL recvLineTCP(int sockfd, char *buffer, uint32_t maxsize, uint32_t *readSize);
++		MDL_BOOL writeAPDU(char *src, uint32_t src_size);
++		
++		
+ //		int receive(char *rxBuf, int len);
+ //		int sendMsg(const char *txBuf, int len);
+ 		void registerHandler(MDCommHandler *pMDHandler);
+diff --git a/jni/softsim.cpp b/jni/softsim.cpp
+index 4dda7b8..88278b1 100644
+--- a/jni/softsim.cpp
++++ b/jni/softsim.cpp
+@@ -30,11 +30,24 @@
+ #include <sys/types.h>
+ #include <sys/stat.h>
+ 
++#include <string.h>   //strlen
++#include <arpa/inet.h>    //close
++#include <sys/types.h>
++#include <sys/socket.h>
++#include <netinet/in.h>
++#include <sys/time.h> //FD_SET, FD_ISSET, FD_ZERO macros
++#include <fcntl.h>
++
+ #include "softsim.h"
+ #include "mdltypes.h"
+ #include "mdllog.h"
+ #include "mdlutil.h"
+ 
++//#define SIMSERVER_HOST "10.7.9.1"
++#define SIMSERVER_HOST "192.168.43.112"
++//#define SIMSERVER_HOST "127.0.0.1"
++#define SIMSERVER_PORT 4711
++
+ void informAutoStartDone() {
+ 	system("am broadcast -a com.mediatek.mdlogger.AUTOSTART_COMPLETE");
+ }
+@@ -124,17 +137,17 @@ MDL_BOOL initMDEngine(void) {
+ 		enableMemoryBandForceLog();
+ 		#endif
+ 
+-		g_pMDEngine = new MDCommEngine();
++		g_pMDEngine = new SimProxy();
+ 		if (!g_pMDEngine->init()) {
+-			MDL_LOGE("Fail to init MDEngine...");
++			MDL_LOGE("Fail to init MDEngine...\n");
+ 			delete g_pMDEngine;
+ 			return MDL_FALSE;
+ 		}
+ 		g_bMDInited = MDL_TRUE;
+-		MDL_LOGD("MDEngine init OK...");
++		MDL_LOGD("MDEngine init OK...\n");
+ 		return MDL_TRUE;
+ 	} else {
+-		MDL_LOGW("MDEngine is already initialized before.");
++		MDL_LOGW("MDEngine is already initialized before.\n");
+ 		return MDL_TRUE;
+ 	}
+ }
+@@ -712,7 +725,41 @@ MDL_BOOL handleMDLReq(MDL_REQ *pReq) {
+ 	return ret;
+ }
+ 
+-int main(void) {
++int tcp_connect(const char *host, int port) {
++	int sockfd;
++	struct sockaddr_in addr;
++
++
++	MDL_LOGD("Connecting to %s:%d\n", host, port);
++	memset(&addr, 0, sizeof addr);
++	addr.sin_family = AF_INET;
++	addr.sin_port = htons(port);
++	if (inet_pton(AF_INET, host, &addr.sin_addr) <= 0) {
++		perror("inet_pton error");
++		return -1;
++	}
++
++	if ( (sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
++		perror("socket");
++		return sockfd;
++	}
++
++	int delay = 1;
++	while (connect(sockfd, (const struct sockaddr *) &addr, sizeof(addr)) < 0) {
++		perror("connect");
++
++		MDL_LOGD("Waiting for %d seconds.\n", delay);
++		sleep(delay);
++
++		delay = (delay > 8) ? delay : delay * 2;
++	}
++
++	return sockfd;
++}
++
++int main(int argc, char **argv) {
++	MDL_LOGD("sizeof(SHARED_MEMORY_HEADER) = %x\n", sizeof(SHARED_MEMORY_HEADER));
++	MDL_LOGD("sizeof(BUF_CTRL_BLOCK) = %x\n", sizeof(BUF_CTRL_BLOCK));
+ 	MDL_LOGD("Starting SIMProxy\n");
+ 	int servFifoFd = -1;
+ 	MDL_REQ req;
+@@ -720,55 +767,42 @@ int main(void) {
+ 	sem_init(&g_semLoggingMode, 0, 1);
+ 
+ 	memset(&req, '\0', sizeof(MDL_REQ));
+-	makeDir(MDL_DATA_DIR);
+-	// Set idle mode by default
+-	setCurrentLoggingMode(MODE_IDLE);
+-	g_selectMode = MODE_IDLE;
+-	g_bMDInited = MDL_FALSE;
+-	g_bAutoStart = MDL_FALSE;
+-	g_bStopMDLogger = MDL_FALSE;
+-	gbStopWaitingSD = MDL_FALSE;
+-	int mode = getSavedLoggingMode();
+-	if (mode == MODE_SD || mode == MODE_USB) {
+-		g_bAutoStart = MDL_TRUE;
+-	}
+-	startLoggingThread(mode);
+-
+-	// Create server FIFO
+-	if (access(SERVER_FIFO, F_OK) == -1) {
+-		if (mkfifo(SERVER_FIFO, 0777) == 0) {
+-			MDL_LOGD("Create server FIFO %s\n", SERVER_FIFO);
+-		} else {
+-			MDL_LOGE("Failed to create server FIFO %s, errno=%d\n", SERVER_FIFO, errno);
+-			goto errorout;
+-		}
+-	}
+-
+-	while (!g_bStopMDLogger) {
+-		if (servFifoFd == -1) {
+-			servFifoFd = open(SERVER_FIFO, O_RDONLY /*| O_NONBLOCK*/);
+-			continue;
+-		}
++	
++	// test
++	MDL_LOGD("InitMDEngine..\n");
++	initMDEngine();
++	enableMemoryDump();
++	
++	char apdubuf[0xFF];
++	uint32_t apdusize;
++	
++	char hexapdubuf[1024];
++	uint32_t hexapdusize = 0;
++	
++	//int sockfd = tcp_connect(argv[1], atoi(argv[2]));
++	int sockfd = tcp_connect(SIMSERVER_HOST, SIMSERVER_PORT);
++	if (sockfd < 0) {
++		MDL_LOGD("-> bailing out\n");
++		return -1;
++	}
++	MDL_LOGD("-> Connected...\n");
++	while(1) {
++		if (g_pMDEngine->checkAPDU(apdubuf, &apdusize) == MDL_TRUE) {
++			// we got a new apdu from the baseband
++			MDL_LOGD("-> Got some APDU from BB\n");
++			
++			if (g_pMDEngine->sendHexLineTCP(sockfd, apdubuf, apdusize) != MDL_TRUE) {
++				sockfd = tcp_connect(SIMSERVER_HOST, SIMSERVER_PORT);
++			}
+ 
+-		bytes = read(servFifoFd, &req, sizeof(MDL_REQ));
+-		if (bytes > 0) {
+-			MDL_LOGD("Read %d bytes from server FIFO, max %d\n", bytes, sizeof(MDL_REQ));
+-			handleMDLReq(&req);
+-		} else {
+-			close(servFifoFd);
+-			servFifoFd = -1;
++			g_pMDEngine->recvLineTCP(sockfd, hexapdubuf, sizeof(hexapdubuf), &hexapdusize);
++			g_pMDEngine->writeAPDU(hexapdubuf, hexapdusize);
++			g_pMDEngine->indicateAPDUResponse();
+ 		}
++		// poll,poll, poll....
++		usleep(50);
+ 	}
+-	if (servFifoFd != -1) {
+-		close(servFifoFd);
+-		servFifoFd = -1;
+-	}
+-	// Delete pipe file
+-//	unlink(SERVER_FIFO);
+-//	unlink(CLIENT_FIFO);
+-	sem_destroy(&g_semLoggingMode);
+-	exit(1);
++	MDL_LOGD("Goodbye.\n");
++	return 0;
+ 
+-	errorout: MDL_LOGE("Exiting MDLogger with error.\n");
+-	exit(0);
+ }
